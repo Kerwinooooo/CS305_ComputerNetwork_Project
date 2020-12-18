@@ -33,6 +33,7 @@ class RDTSocket(UnreliableSocket):
         self.ssl = 0
         self.ISN = 0
         self.port = None
+        #
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -169,8 +170,8 @@ class RDTSocket(UnreliableSocket):
 
     '''
     segment format:
-    blank SYN  FIN  ACK  SEQ    SEQACK LEN    CHECKSUM PAYLOAD
-    5bit  1bit 1bit 1bit 4bytes 4bytes 4bytes 2bytes   LEN bytes
+    Hamming_code | blank | SYN | FIN | ACK | SEQ   | SEQ_ACK | LEN   | PAYLOAD
+    33bits       | 4bit  |1bit | 1bit| 1bit| 4bytes| 4bytes  |4bytes | LEN bytes
     '''
 
     def segment(self, data: bytes, packet_size):
@@ -181,6 +182,7 @@ class RDTSocket(UnreliableSocket):
             segments[i] = int(0b001).to_bytes(1, 'big') + int(i).to_bytes(4, 'big') + int(0).to_bytes(4, 'big') + \
                           self.check_sum(segments[i]).to_bytes(2, 'big') + packet_size.to_bytes(4, 'big') + segments[i]
         return segments
+
 
     @staticmethod
     def check_sum(segment: bytes):

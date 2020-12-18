@@ -13,38 +13,43 @@ def addr_to_bytes(addr):
     return inet_aton(addr[0]) + addr[1].to_bytes(4, 'big')
 
 
-def get_sendto(idd, rate=None):
+def get_sendto(id, rate=None):
     if rate:
         def sendto(data: bytes, addr):
-            time.sleep(len(data)/rate)
-            sockets[idd].sendto(addr_to_bytes(addr) + data, network)
+            print('send to :', data, addr)
+            time.sleep(len(data) / rate)
+            sockets[id].sendto(addr_to_bytes(addr) + data, network)
+
         return sendto
     else:
         def sendto(data: bytes, addr):
-            sockets[idd].sendto(addr_to_bytes(addr) + data, network)
+            print('send to :', data, addr)
+            sockets[id].sendto(addr_to_bytes(addr) + data, network)
+
         return sendto
 
 
 class UnreliableSocket:
     def __init__(self, rate=None):
-        assert rate is None or rate > 0, 'Rate should be positive or None.'
+        assert rate == None or rate > 0, 'Rate should be positive or None.'
         sockets[id(self)] = socket(AF_INET, SOCK_DGRAM)
         self.sendto = get_sendto(id(self), rate)
-        
+
     def bind(self, address: (str, int)):
         sockets[id(self)].bind(address)
-        
+
     def recvfrom(self, bufsize):
         data, frm = sockets[id(self)].recvfrom(bufsize)
         addr = bytes_to_addr(data[:8])
+        print('receive : ', data[8:], addr)
         if frm == network:
             return data[8:], addr
         else:
             return self.recvfrom(bufsize)
-    
+
     def settimeout(self, value):
         sockets[id(self)].settimeout(value)
-    
+
     def gettimeout(self):
         return sockets[id(self)].gettimeout()
 

@@ -4,7 +4,7 @@ import time
 
 
 class RDTSocket(UnreliableSocket):
-    """
+    """。，
     The functions with which you are to build your RDT.
     -   recvfrom(bufsize)->bytes, addr
     -   sendto(bytes, address)
@@ -15,7 +15,6 @@ class RDTSocket(UnreliableSocket):
     -   setblocking(flag)
     By default, a socket is created in the blocking mode. 
     https://docs.python.org/3/library/socket.html#socket-timeouts
-
     """
     def __init__(self, rate=None, debug=True):
         super().__init__(rate=rate)
@@ -26,12 +25,18 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         # TODO: ADD YOUR NECESSARY ATTRIBUTES HERE
         #############################################################################
-        
+        syn_length = 1
+        fin_length = 1
+        ack_length = 1
+        seq_length = 16
+        seqack_length = 16
+        len_length = 16
+        checksum_length = 16
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
 
-    def accept(self) -> (RDTSocket, (str, int)):
+    def accept(self) -> ('RDTSocket', (str, int)):
         """
         Accept a connection. The socket must be bound to an address and listening for 
         connections. The return value is a pair (conn, address) where conn is a new 
@@ -50,7 +55,7 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         return conn, addr
 
-    def connect(self, address:(str, int)):
+    def connect(self, address: (str, int)):
         """
         Connect to a remote socket at address.
         Corresponds to the process of establishing a connection on the client side.
@@ -63,7 +68,7 @@ class RDTSocket(UnreliableSocket):
         #                             END OF YOUR CODE                              #
         #############################################################################
 
-    def recv(self, bufsize:int)->bytes:
+    def recv(self, bufsize: int) -> bytes:
         """
         Receive data from the socket. 
         The return value is a bytes object representing the data received. 
@@ -84,7 +89,7 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         return data
 
-    def send(self, bytes:bytes):
+    def send(self, bytes: bytes):
         """
         Send data to the socket. 
         The socket must be connected to a remote socket, i.e. self._send_to must not be none.
@@ -101,12 +106,12 @@ class RDTSocket(UnreliableSocket):
     def close(self):
         """
         Finish the connection and release resources. For simplicity, assume that
-        after a socket is closed, neither futher sends nor receives are allowed.
+        after a socket is closed, neither further sends nor receives are allowed.
         """
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
-        
+
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -118,8 +123,36 @@ class RDTSocket(UnreliableSocket):
     def set_recv_from(self, recv_from):
         self._recv_from = recv_from
 
+
 """
 You can define additional functions and classes to do thing such as packing/unpacking packets, or threading.
 
 """
 
+
+def set_syn(data: bytes, flag) -> bytes:
+    pass
+
+
+def get_syn(data: bytes) -> int:
+    pass
+
+
+def set_fin(data: bytes, flag) -> bytes:
+    pass
+
+
+def get_fin(data: bytes) -> int:
+    return int.from_bytes(data[1:2], 'big')
+
+
+def set_ack(data: bytes, flag) -> bytes:
+    pass
+
+
+def get_ack(data: bytes) -> int:
+    pass
+
+
+def get_chunks(data: bytes, buffersize):
+    chunks = [data[i: i + buffersize] for i in range(0, len(data), buffersize)]

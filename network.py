@@ -5,10 +5,7 @@ import threading
 import queue
 from socketserver import ThreadingUDPServer
 
-
 lock = threading.Lock()
-server_address = ('127.0.0.1', 12345)
-
 
 
 def bytes_to_addr(bytes):
@@ -33,7 +30,7 @@ class Server(ThreadingUDPServer):
         self.rate = rate
         self.buffer = 0
         self.delay = delay
-        self.loss = 0
+        self.loss = 0.5
 
     def verify_request(self, request, client_address):
         """
@@ -84,7 +81,7 @@ class Server(ThreadingUDPServer):
             socket.sendto(addr_to_bytes(client_address) + data[8:], to)
         else:
             print(client_address, to, 'fail')  # observe tht traffic
-            socket.sendto(addr_to_bytes(client_address) + data[8:], to)
+            # socket.sendto(addr_to_bytes(client_address) + data[8:], to)
 
 
 server_address = ('127.0.0.1', 12345)

@@ -16,14 +16,14 @@ def addr_to_bytes(addr):
 def get_sendto(id, rate=None):
     if rate:
         def sendto(data: bytes, addr):
-            print('send to :', data, addr)
+            # print('send to :', data, addr)
             time.sleep(len(data) / rate)
             sockets[id].sendto(addr_to_bytes(addr) + data, network)
 
         return sendto
     else:
         def sendto(data: bytes, addr):
-            print('send to :', data, addr)
+            # print('send to :', data, addr)
             sockets[id].sendto(addr_to_bytes(addr) + data, network)
 
         return sendto
@@ -41,7 +41,7 @@ class UnreliableSocket:
     def recvfrom(self, bufsize):
         data, frm = sockets[id(self)].recvfrom(bufsize)
         addr = bytes_to_addr(data[:8])
-        print('receive : ', data[8:], addr)
+        # print('receive : ', data[8:], addr)
         if frm == network:
             return data[8:], addr
         else:

@@ -16,6 +16,8 @@ if __name__ == '__main__':
     # server1 = Server(server_address1)
     # server1.serve_forever()
     server1 = socket1.accept()
-    server1._recv_from(1024)
-    server1.close()
-    server1 = socket1.accept()
+    while True:
+        try:
+            server1._recv_from(1024)
+        except OSError:
+            break

@@ -1,3 +1,5 @@
+import time
+
 from rdt import RDTSocket
 
 addr1 = ('127.0.0.1', 60)
@@ -15,3 +17,8 @@ if __name__ == '__main__':
     socket1.connect(addr3)
     socket1.close()
     # client1.sendto(b'hello')
+    # while True:
+    #     try:
+    #         socket1.recv_from(1024)
+    #     except OSError:
+    #         break

@@ -13,5 +13,5 @@ if __name__ == '__main__':
     socket2 = RDTSocket()
     socket2.bind(addr2)
     socket1.connect(addr3)
-    # socket1.close()
+    socket1.close()
     # client1.sendto(b'hello')

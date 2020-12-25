@@ -303,14 +303,14 @@ class RDTSocket(UnreliableSocket):
 
     @staticmethod
     def from_bytes(data: bytes):
-        if len(data) < 17:
+        if len(data) < 14:
             pass
         else:
-            flag = int.from_bytes(data[0:5], 'big')
-            seq = int.from_bytes(data[5:9], 'big')
-            ack = int.from_bytes(data[9:13], 'big')
-            length = int.from_bytes(data[13:17], 'big')
-            content = data[17:]
+            flag = int.from_bytes(data[0:2], 'big')
+            seq = int.from_bytes(data[2:6], 'big')
+            ack = int.from_bytes(data[6:10], 'big')
+            length = int.from_bytes(data[10:14], 'big')
+            content = data[14:]
             return flag, seq, ack, length, content
 
     """

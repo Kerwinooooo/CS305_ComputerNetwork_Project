@@ -304,6 +304,7 @@ class RDTSocket(UnreliableSocket):
         if len(data) < 14:
             pass
         else:
+            check_sum = int.from_bytes(data[0], 'big')
             flag = int.from_bytes(data[0:2], 'big')
             seq = int.from_bytes(data[2:6], 'big')
             ack = int.from_bytes(data[6:10], 'big')

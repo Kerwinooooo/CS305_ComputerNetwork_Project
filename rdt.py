@@ -317,7 +317,10 @@ class RDTSocket(UnreliableSocket):
             content = data[14:]
             return check_sum, flag, seq, ack, length, content
 
+    @staticmethod
+    def check_checksum(data:bytes):
+        pass
+
     """
     You can define additional functions and classes to do thing such as packing/unpacking packets, or threading.
-    
     """

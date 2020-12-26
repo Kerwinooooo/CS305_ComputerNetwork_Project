@@ -1,4 +1,3 @@
-
 """
 hamming code 有点不切实际， 生成hamming code需要遍历 2^35个bits， 所以我改成了checksum.
 rdt.py中的from_bytes我一并改了
@@ -23,7 +22,6 @@ class Segment(object):
         self.content: bytes = content
         self.checksum = self.Generate_checksum()
 
-
     def Generate_checksum(self):
         if self.empty:
             tmp = 0
@@ -36,7 +34,6 @@ class Segment(object):
             r_ed = (sum & 0xFF).to_bytes(1, 'big')
 
         return r_ed
-
 
     def Check_checksum(self):
         sum = 0
@@ -58,9 +55,9 @@ class Segment(object):
         pass
 
     @staticmethod
-    def find_i_number(index : int, data_list: list):
+    def find_i_number(index: int, data_list: list):
         row = int(index / 8)
-        col = index%8
+        col = index % 8
         if col == 0:
             r_ed = data_list[row][-1]
         else:

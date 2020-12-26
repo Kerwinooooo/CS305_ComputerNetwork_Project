@@ -15,8 +15,8 @@ if __name__ == '__main__':
     socket2.bind(addr4)
     # server1 = Server(server_address1)
     # server1.serve_forever()
-    server1 = socket1.accept()
-    # server1.close()
+    server1, client_address = socket1.accept()
+    server1.close()
     while True:
         try:
             server1.recv_from(1024)

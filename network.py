@@ -30,7 +30,7 @@ class Server(ThreadingUDPServer):
         self.rate = rate
         self.buffer = 0
         self.delay = delay
-        self.loss = 0.5
+        self.loss = 0
 
     def verify_request(self, request, client_address):
         """

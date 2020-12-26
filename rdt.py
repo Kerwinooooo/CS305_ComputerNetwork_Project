@@ -300,7 +300,6 @@ class RDTSocket(UnreliableSocket):
             data, addr = recv_from(1024)
             if addr != self.to_address:
                 pass
-
             return data, addr
 
         self.recv_from = get_recv_from

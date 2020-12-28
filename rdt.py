@@ -84,7 +84,7 @@ class RDTSocket(UnreliableSocket):
             try:
                 data, addr = self.recv_from(1024)
                 check_sum, flag, seq, ack, length, content = self.from_bytes(data)
-                print(check_sum, flag, ACK, addr, self.to_address)
+                # print(check_sum, flag, ACK, addr, self.to_address)
                 if self.check_checksum(data) and flag == SYN and addr == self.to_address:
                     print('recv syn')
                 # print(flag , ACK , addr , self.to_address)

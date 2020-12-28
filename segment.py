@@ -23,7 +23,10 @@ class Segment(object):
 
     @staticmethod
     def Generate_checksum(data: bytes):
-        pass
+        s = sum(a for a in data)
+        s = s % 256
+        s = 0xFF - s
+        return s.to_bytes(1, 'big')
 
     def Generate_Hamming_code(self):
         pass

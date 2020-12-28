@@ -82,7 +82,7 @@ class Server(ThreadingUDPServer):
             flag_loss = True
             return
         for i in range(len(data) - 1):
-            if random.random() < 0.01:
+            if random.random() < 0.05:
                 flag_corrupt = True
                 data = data[:i] + (data[i] + 1).to_bytes(1, 'big') + data[i + 1:]
                 print(client_address, to, 'corrupt')  # observe tht traffic

@@ -31,7 +31,7 @@ def get_sendto(id, rate=None):
 
 class UnreliableSocket:
     def __init__(self, rate=None):
-        assert rate == None or rate > 0, 'Rate should be positive or None.'
+        assert rate is None or rate > 0, 'Rate should be positive or None.'
         sockets[id(self)] = socket(AF_INET, SOCK_DGRAM)
         self.sendto = get_sendto(id(self), rate)
 
@@ -77,5 +77,5 @@ if __name__ == "__main__":
         sock1.sendto(b'hello', ('127.0.0.1', 82))
     for i in range(100):
         a = sock2.recvfrom(2048)
-        print(type(a[0]))
-        print(type(a[1]))
+        # print(type(a[0]))
+        # print(type(a[1]))

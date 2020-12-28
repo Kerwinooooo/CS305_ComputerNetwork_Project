@@ -31,6 +31,7 @@ class Server(ThreadingUDPServer):
         self.buffer = 0
         self.delay = delay
         self.loss = 0
+        self.error_rate = 0
 
     def verify_request(self, request, client_address):
         """
@@ -77,11 +78,11 @@ class Server(ThreadingUDPServer):
         to = bytes_to_addr(data[:8])
         flag_loss = False
         flag_corrupt = False
-        if random.random() < 0.2:
+        if random.random() < self.loss:
             print(client_address, to, 'loss')  # observe tht traffic
             return
         for i in range(len(data) - 1):
-            if random.random() < 0.1:
+            if random.random() < self.error_rate:
                 flag_corrupt = True
                 data = data[:i] + (data[i] + 1).to_bytes(1, 'big') + data[i + 1:]
                 print(client_address, to, 'corrupt')  # observe tht traffic

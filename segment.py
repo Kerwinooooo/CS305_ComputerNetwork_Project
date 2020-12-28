@@ -2,8 +2,8 @@
 hamming code 有点不切实际， 生成hamming code需要遍历 2^35个bits， 所以我改成了checksum.
 rdt.py中的from_bytes我一并改了
 segment format:
-Checksum| blank | SYN  | FIN | ACK | SEQ   | SEQ_ACK | LEN   | PAYLOAD
-1bytes  | 5bit  | 1bit | 1bit| 1bit| 4bytes| 4bytes  |4bytes | LEN bytes
+Checksum| blank | magical_bit | SYN  | FIN | ACK | SEQ   | SEQ_ACK | LEN   | PAYLOAD
+1bytes  | 4bit  |     1bit    | 1bit | 1bit| 1bit| 4bytes| 4bytes  |4bytes | LEN bytes
 """
 
 SYN = (1 << 2)

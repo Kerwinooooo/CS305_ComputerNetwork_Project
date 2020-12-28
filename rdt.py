@@ -31,7 +31,6 @@ class RDTSocket(UnreliableSocket):
     By default, a socket is created in the blocking mode.
     https://docs.python.org/3/library/socket.html#socket-timeouts
     """
-    target_address: tuple[str, int]
     seq: int
     seqack: int
     max_data_length: int = 3000
@@ -61,6 +60,7 @@ class RDTSocket(UnreliableSocket):
         self.ISN = 0
         self.seq = 0
         self.ack = 0
+        self.seqack = 0
         # 连接的socket的地址
         self.to_address = None
         self.port = None
@@ -126,6 +126,8 @@ class RDTSocket(UnreliableSocket):
         print('connection build')
         time.sleep(time_out)
         self.setblocking(True)
+        self.seq = 0
+        self.seqack = 0
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -180,6 +182,8 @@ class RDTSocket(UnreliableSocket):
                 print('send ack')
         print('connection build')
         self.setblocking(True)
+        self.seq = 0
+        self.seqack = 0
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -237,7 +241,7 @@ class RDTSocket(UnreliableSocket):
             if segment_received.LEN == 0:
                 if segment_received.magical_bit == 1:  # send先结束
                     magical_segment_ack = RdtSegment(magical_bit=1, ack=1)
-                    self.sendto(magical_segment_ack.encode(), self.target_address)  # #######################################
+                    self.sendto(magical_segment_ack.encode())
                     timer_start = time.time()
                     while True:
                         if time.time() - timer_start >= self.TIMEOUT:
@@ -245,7 +249,7 @@ class RDTSocket(UnreliableSocket):
                         try:
                             sr, _ = self.receive_something(4096)
                             if sr.magical_bit == 1:
-                                self.sendto(magical_segment_ack.encode(), self.target_address)
+                                self.sendto(magical_segment_ack.encode())
                                 timer_start = time.time()
                         except Exception as e:
                             continue
@@ -255,14 +259,14 @@ class RDTSocket(UnreliableSocket):
                 data_receive += segment_received.paylaod
                 # 回一个包 带seqack
                 rep = RdtSegment(ack=1, seq=seq, seqack=seqack)
-                self.sendto(rep.encode(), self.target_address)
+                self.sendto(rep.encode())
                 seqack += len(segment_received.paylaod)
             else:  # recv先结束
                 if bufsize > len(data_receive):
                     data_receive += segment_received.paylaod[:bufsize-len(data_receive)]
                 # 回一个特殊标识包 带seqack
                 rep = RdtSegment(magical_bit=1, ack=1, seq=seq, seqack=seqack)
-                self.sendto(rep.encode(), self.target_address)
+                self.sendto(rep.encode())
 
                 timer_start = time.time()
                 while True:
@@ -272,7 +276,7 @@ class RDTSocket(UnreliableSocket):
                         sr, _ = self.receive_something(4096)
                         if sr.magical_bit == 1:
                             # 重发标识包 带seqack
-                            self.sendto(rep.encode(), self.target_address)
+                            self.sendto(rep.encode())
                             timer_start = time.time()
                     except Exception as e:
                         continue
@@ -312,7 +316,7 @@ class RDTSocket(UnreliableSocket):
         for i in range(segment_num):
             seq_list.append(seq)
             seq += len(payload_list[i])
-        seq_list[segment_num] = seq
+        seq_list.append(seq)
         # self.seq += len(bytes) # 每发送到对面一个包就+一次
 
         window_left = 0
@@ -324,7 +328,7 @@ class RDTSocket(UnreliableSocket):
         while True:
             data_segment = RdtSegment(seq=seq_list[count], seqack=seqack, payload=payload_list[count])
             while True:
-                self.sendto(data_segment.encode(), self.target_address)  # where is target
+                self.sendto(data_segment.encode())  # where is target
                 time_send = time.time()
                 try:
                     ack, address = self.receive_something()
@@ -366,16 +370,16 @@ class RDTSocket(UnreliableSocket):
 
         # 发标识包让recv关闭
         magical_segment = RdtSegment(magical_bit=1, ack=1)
-        self.sendto(magical_segment.encode(), self.target_address)
+        self.sendto(magical_segment.encode())
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
 
-    def receive_something(self, bufsize: int = 4096) -> ('RdtSegment', tuple[str, int]):
+    def receive_something(self, bufsize: int = 4096):
         data, address = self.recvfrom(bufsize)
 
         # CHECK SEGMENT SOURCE
-        if address[0] != self.target_address[0] or address[1] != self.target_address[1]:
+        if address[0] != self.to_address[0] or address[1] != self.to_address[1]:
             raise Exception('Packet from Unknown Source')
 
         # CHECK SEGMENT LENGTH
@@ -613,10 +617,17 @@ class RdtSegment:
         return self.magical_bit, self.syn, self.fin, self.ack, self.seq, self.seqack
 
     def generate_checksum(self) -> int:
-        pass
+        s = sum(a for a in self.paylaod)
+        s = s + (self.magical_bit << 3) + (self.syn << 2) + (self.fin << 1) + self.ack
+        s = s + ((self.seq & 0xFF000000) >> 24) + ((self.seq & 0x00FF0000) >> 16) + ((self.seq & 0x0000FF00) >> 8) + (self.seq & 0x000000FF)
+        s = s + ((self.seqack & 0xFF000000) >> 24) + ((self.seqack & 0x00FF0000) >> 16) + ((self.seqack & 0x0000FF00) >> 8) + (self.seqack & 0x000000FF)
+        s = s + ((self.LEN & 0xFF000000) >> 24) + ((self.LEN & 0x00FF0000) >> 16) + ((self.LEN & 0x0000FF00) >> 8) + (self.LEN & 0x000000FF)
+        s = s % 256
+        s = 0xFF - s
+        return s
 
     def check_checksum(self) -> bool:
-        pass
+        return self.checksum == self.generate_checksum()
 
     def header_encode(self) -> bytes:
         onebyte = 0x00

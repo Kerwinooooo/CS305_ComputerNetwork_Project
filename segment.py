@@ -20,30 +20,13 @@ class Segment(object):
         self.ack_num: int = ack_num
         self.length: int = len(content)
         self.content: bytes = content
-        self.checksum = self.Generate_checksum()
 
-    def Generate_checksum(self):
-        if self.empty:
-            tmp = 0
-            r_ed = tmp.to_bytes(1, 'big')
-        else:
-            sum = 0
-            for con in self.content:
-                sum += con
-            sum = -(sum % 256)
-            r_ed = (sum & 0xFF).to_bytes(1, 'big')
-
-        return r_ed
-
-    def Check_checksum(self):
-        sum = 0
-        for con in self.content:
-            sum += con
-        sum += self.checksum
-        if sum == 0:
-            return True
-        else:
-            return False
+    @staticmethod
+    def Generate_checksum(data: bytes):
+        s = sum(a for a in data)
+        s = s % 256
+        s = 0xFF - s
+        return s.to_bytes(1, 'big')
 
     def Generate_Hamming_code(self):
         pass
@@ -71,10 +54,11 @@ class Segment(object):
     def to_bytes(self):
         # assert self.hamming_code is not None
         if self.empty:
-            data: bytes = self.checksum + self.flag.to_bytes(1, 'big') + self.seq_num.to_bytes(4, 'big') + \
+            data: bytes = self.flag.to_bytes(1, 'big') + self.seq_num.to_bytes(4, 'big') + \
                           self.ack_num.to_bytes(4, 'big') + self.length.to_bytes(4, 'big')
         else:
-            data: bytes = self.checksum + self.flag.to_bytes(1, 'big') + self.seq_num.to_bytes(4, 'big') + \
+            data: bytes = self.flag.to_bytes(1, 'big') + self.seq_num.to_bytes(4, 'big') + \
                           self.ack_num.to_bytes(4, 'big') + self.length.to_bytes(4, 'big') + \
                           self.content
+        data = self.Generate_checksum(data) + data
         return data

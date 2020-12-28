@@ -79,14 +79,13 @@ class Server(ThreadingUDPServer):
         flag_corrupt = False
         if random.random() < 0.2:
             print(client_address, to, 'loss')  # observe tht traffic
-            flag_loss = True
             return
         for i in range(len(data) - 1):
             if random.random() < 0.1:
                 flag_corrupt = True
                 data = data[:i] + (data[i] + 1).to_bytes(1, 'big') + data[i + 1:]
                 print(client_address, to, 'corrupt')  # observe tht traffic
-        if not flag_loss and not flag_corrupt:
+        if not flag_corrupt:
             print(client_address, to, 'success')
         socket.sendto(addr_to_bytes(client_address) + data[8:], to)
 

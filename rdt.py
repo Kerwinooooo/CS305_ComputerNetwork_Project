@@ -64,11 +64,11 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         while True:
             data, addr = self.recvfrom(1024)
-            print('recv syn')
             check_sum, flag, seq, ack, length, content = self.from_bytes(data)
             # print(flag, seq, ack, length, content)
             # print(flag , SYN , addr , self.to_address)
             if self.check_checksum(data) and flag == SYN:
+                print('recv syn')
                 self.client = False
                 self.to_address = addr
                 self.set_send_to(self.sendto, self.to_address)

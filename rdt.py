@@ -62,25 +62,25 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
-        data, addr = self.recvfrom(1024)
-        print('recv syn')
-        self.client = False
-        self.to_address = addr
-        self.set_send_to(self.sendto, self.to_address)
-        self.set_recv_from(self.recvfrom)
         while True:
+            data, addr = self.recvfrom(1024)
+            print('recv syn')
             check_sum, flag, seq, ack, length, content = self.from_bytes(data)
             # print(flag, seq, ack, length, content)
             # print(flag , SYN , addr , self.to_address)
-            if self.check_checksum(data) and flag == SYN and addr == self.to_address:
+            if self.check_checksum(data) and flag == SYN:
+                self.client = False
+                self.to_address = addr
+                self.set_send_to(self.sendto, self.to_address)
+                self.set_recv_from(self.recvfrom)
                 self.ack = seq + 1
                 SYNACK_segment = Segment(empty=True, flag=SYN + ACK, seq_num=self.seq, ack_num=self.ack,
                                          content=content)
                 self.sendto(SYNACK_segment.to_bytes())
                 print('send syn ack')
                 break
+        self.setblocking(False)
         while True:
-            self.setblocking(False)
             try:
                 data, addr = self.recv_from(1024)
                 check_sum, flag, seq, ack, length, content = self.from_bytes(data)
@@ -270,7 +270,6 @@ class RDTSocket(UnreliableSocket):
                 self.sendto(ACK_segment.to_bytes())
                 time.sleep(0.1)
                 print('send ack')
-
             while True:
                 FIN_segment = Segment(empty=True, flag=FIN, seq_num=self.seq, ack_num=seq + 1)
                 self.sendto(FIN_segment.to_bytes())

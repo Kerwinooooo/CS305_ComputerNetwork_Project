@@ -33,6 +33,7 @@ if __name__ == '__main__':
             for slice in slices:
                 client.send(slice)
                 reply = client.recv(slice_size)
+                echo += reply
     else:
         print('transmit in mode B')
         start = time.perf_counter()
@@ -54,3 +55,4 @@ if __name__ == '__main__':
     for line in diff:
         if not line.startswith('  '):  # check if data is correctly echoed
             print(line)
+    print('echo: ', len(echo))

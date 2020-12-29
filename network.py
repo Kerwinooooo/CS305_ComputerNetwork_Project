@@ -30,6 +30,8 @@ class Server(ThreadingUDPServer):
         self.rate = rate
         self.buffer = 0
         self.delay = delay
+        loss = 0.05
+        error_rate = 0.00005
         if not loss:
             self.loss = 0
         else:

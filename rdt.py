@@ -535,19 +535,6 @@ class RDTSocket(UnreliableSocket):
         if self.client:
             super().close()
 
-    # def keep_receive(self):
-    #     while True:
-    #         try:
-    #             data, address = super().recvfrom(4096)
-    #             data = RdtSegment.decode()
-    #             if len(data.payload) != 0 and data.fin != 1:
-    #                 self.receive_list.put(data, block=False)
-    #             else:
-    #                 pass
-    #         except Exception as e:
-    #             logging.error(e)
-    #             continue
-
     @staticmethod
     def from_bytes(data: bytes):
         check_sum = data[0]

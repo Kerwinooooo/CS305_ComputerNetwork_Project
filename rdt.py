@@ -547,8 +547,8 @@ class RDTSocket(UnreliableSocket):
         #                             END OF YOUR CODE                              #
         #############################################################################
         self.setblocking(True)
-        # if self.client:
-        super().close()
+        if self.client:
+            super().close()
 
     @staticmethod
     def from_bytes(data: bytes):

@@ -560,9 +560,11 @@ class RDTSocket(UnreliableSocket):
         #                             END OF YOUR CODE                              #
         #############################################################################
         self.setblocking(True)
-        # if self.client:
-        self.belong_to.use[self.use_seq] = False
-        self.belong_to.super().close()
+        if not self.client:
+            self.belong_to.use[self.use_seq] = False
+            self.belong_to.super().close()
+        else:
+            self.close()
 
     @staticmethod
     def from_bytes(data: bytes):

@@ -63,6 +63,8 @@ class RDTSocket(UnreliableSocket):
         # 连接的socket的地址
         self.address = None
         self.to_address = None
+        self.port = None
+
         self.TIMEOUT = 1
         self.rtt_list = []
         # 连接池的情况
@@ -177,6 +179,7 @@ class RDTSocket(UnreliableSocket):
             end = time.time()
             try:
                 data, addr = self.recvfrom(1024)
+                start = time.time()
                 print('recv syn ack')
             except BlockingIOError:
                 continue
@@ -240,7 +243,7 @@ class RDTSocket(UnreliableSocket):
                     segment_received.seq, segment_received.seqack,
                     segment_received.LEN))
 
-            if seqack != segment_received.seq:
+            if seqack != segment_received.seq:  # TODO: 可以发以前seq的回包
                 if self.debug: logging.error(
                     'recv(): RECEIVE WRONG SEQ SEQ: {}, LASTSEQACK: {}'.format(segment_received.seq, seqack))
                 continue
@@ -251,7 +254,7 @@ class RDTSocket(UnreliableSocket):
                     self.setblocking(False)
                     self.sendto(magical_segment_ack.encode(), self.to_address)
                     time_send = time.time()
-                    while time.time() - time_send < 2 * self.TIMEOUT:
+                    while time.time() - time_send < 2 * self.TIMEOUT:  # Problem
                         try:
                             sr, _ = self.receive_something(4096)
                             if self.END:
@@ -382,6 +385,10 @@ class RDTSocket(UnreliableSocket):
 
                     if ack.ack != 1:
                         if self.debug: logging.warning('send(): RECEIVE A REPLY WITH NO ACK')
+                        if ack.LEN == 0 and ack.magical_bit == 1:
+                            if self.debug: logging.warning('send(): THERE IS TOO MANY PACKET LOSS')
+                            timeout_process = RdtSegment(magical_bit=1, ack=1)
+                            self.sendto(timeout_process.encode(), self.to_address)
                         raise Exception
 
                     if ack.seqack == seq_list[count + 1]:

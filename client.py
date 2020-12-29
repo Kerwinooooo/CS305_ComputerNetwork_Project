@@ -10,15 +10,10 @@ server_address1 = ('127.0.0.1', 12345)
 server_address2 = ('127.0.0.1', 23456)
 
 if __name__ == '__main__':
-    socket1 = RDTSocket()
-    socket1.bind(addr1)
-    socket2 = RDTSocket()
-    socket2.bind(addr2)
-    socket1.connect(addr3)
-    socket1.sendto(b'hello')
-    socket1.close()
-    # while True:
-    #     try:
-    #         socket1.recv_from(1024)
-    #     except OSError:
-    #         break
+    client = RDTSocket(debug=True)
+    client2 = RDTSocket(debug=True)
+    client.connect(('127.0.0.1', 9999))
+    print(1)
+    time.sleep(5)
+    client2.connect(('127.0.0.1', 9999))
+    print(2)

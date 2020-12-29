@@ -1,5 +1,3 @@
-import time
-
 from USocket import UnreliableSocket
 import threading
 import time
@@ -9,6 +7,7 @@ import logging
 import queue
 import struct
 from threading import Lock
+import numpy as np
 
 logging.basicConfig(level=logging.NOTSET)
 
@@ -19,7 +18,7 @@ frequency = 0.05
 
 
 class RDTSocket(UnreliableSocket):
-    """。，
+    """
     The functions with which you are to build your RDT.
     -   recvfrom(bufsize)->bytes, addr
     -   sendto(bytes, address)
@@ -33,13 +32,14 @@ class RDTSocket(UnreliableSocket):
     """
     seq: int
     seqack: int
-    max_data_length: int = 3000
+    max_data_length: int = 2000
     header_length: int = 14
     len_length: int = 4
     seq_length: int = 4
     seqack_length: int = 4
     window_size: int = 10
     lock = Lock()
+    END: bool = False
 
     def __init__(self, rate=None, debug=True):
         super().__init__(rate=rate)
@@ -60,18 +60,17 @@ class RDTSocket(UnreliableSocket):
         self.ISN = 0
         self.seq = 0
         self.ack = 0
-        self.seqack = 0
+        self.seqack = 0  # it is used by zhb
         # 连接的socket的地址
         self.to_address = None
         self.port = None
 
         self.TIMEOUT = 1
         self.rtt_list = []
-        # self.receive_list = queue.Queue(maxsize=-1)  # ?
+        # self.receive_list = queue.Queue(maxsize=-1)  # TODO: delete
         # queue.empty()
         # queue.put(block=False)
         # queue.get(block=False)
-        #
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -172,7 +171,7 @@ class RDTSocket(UnreliableSocket):
             end = time.time()
             try:
                 data, addr = self.recv_from(1024)
-                start = time.time()
+                start = time.time()  # TODO: timer更新的时机可能不太对
                 print('recv syn ack')
             except BlockingIOError:
                 continue
@@ -200,6 +199,7 @@ class RDTSocket(UnreliableSocket):
         """
         data_receive = b''
         # assert self._recv_from, "Connection not established yet. Use recvfrom instead."
+        # TODO: detect whether connection is established
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
@@ -219,13 +219,14 @@ class RDTSocket(UnreliableSocket):
             # RECEIVE SEGMENT
             try:
                 segment_received, address = self.receive_something(bufsize=bufsize)
+                if self.END:
+                    return b''
             except Exception as e:
-                logging.error(e)
                 continue
 
-            # PRINT INFORMATION
+            # PRINT WHAT RECEIVE
             if self.debug:
-                logging.info('RECEIVE A PACKET FROM {}: MAGICAL_BIT: {}, '
+                logging.info('recv(): RECEIVE A PACKET FROM {}: MAGICAL_BIT: {}, '
                              'SYN: {}, FIN: {}, ACK: {}, '
                              'SEQ: {}, SEQACK: {}, LEN: {}'.format(
                                 address,
@@ -235,7 +236,7 @@ class RDTSocket(UnreliableSocket):
                                 segment_received.LEN))
 
             if seqack != segment_received.seq:
-                logging.error('recv(): RECEIVE WRONG SEQ SEQ: {}, LASTSEQACK: {}'.format(segment_received.seq, seqack))
+                if self.debug: logging.error('recv(): RECEIVE WRONG SEQ SEQ: {}, LASTSEQACK: {}'.format(segment_received.seq, seqack))
                 continue
 
             if segment_received.LEN == 0:
@@ -248,20 +249,25 @@ class RDTSocket(UnreliableSocket):
                             break
                         try:
                             sr, _ = self.receive_something(4096)
-                            if sr.magical_bit == 1:
+                            if self.END:
+                                return b''
+                            if sr.magical_bit == 1 and sr.ack == 0:
                                 self.sendto(magical_segment_ack.encode())
                                 timer_start = time.time()
                         except Exception as e:
                             continue
                     break
                 continue
-            if segment_received.LEN + len(data_receive) <= bufsize:
+            if segment_received.LEN + len(data_receive) <= bufsize:  # RECEIVE SOME DATA
                 data_receive += segment_received.paylaod
                 # 回一个包 带seqack
-                rep = RdtSegment(ack=1, seq=seq, seqack=seqack)
-                self.sendto(rep.encode())
                 seqack += len(segment_received.paylaod)
+                rep = RdtSegment(ack=1, seq=seq, seqack=seqack)
+                print(seq, seqack)
+                self.sendto(rep.encode())
+
             else:  # recv先结束
+                if self.debug: logging.info('recv() end first')
                 if bufsize > len(data_receive):
                     data_receive += segment_received.paylaod[:bufsize-len(data_receive)]
                 # 回一个特殊标识包 带seqack
@@ -269,11 +275,13 @@ class RDTSocket(UnreliableSocket):
                 self.sendto(rep.encode())
 
                 timer_start = time.time()
-                while True:
+                while True:  # BIGPROBLEM HOLYSHIT
                     if time.time() - timer_start >= self.TIMEOUT:
                         break
                     try:
                         sr, _ = self.receive_something(4096)
+                        if self.END:
+                            return b''
                         if sr.magical_bit == 1:
                             # 重发标识包 带seqack
                             self.sendto(rep.encode())
@@ -285,7 +293,7 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
-        self.seqack = seqack
+        self.seqack = seqack  # UPDATE SEQACK
         return data_receive
 
     def send(self, bytes: bytes):
@@ -309,15 +317,14 @@ class RDTSocket(UnreliableSocket):
 
         seq = self.seq
         seqack = self.seqack
-        seq_list = []
         payload_list = get_data_chunks(bytes, self.max_data_length)
         segment_num = len(payload_list)
+        seq_list = []
 
         for i in range(segment_num):
             seq_list.append(seq)
             seq += len(payload_list[i])
         seq_list.append(seq)
-        # self.seq += len(bytes) # 每发送到对面一个包就+一次
 
         window_left = 0
         window_right = self.window_size
@@ -326,51 +333,88 @@ class RDTSocket(UnreliableSocket):
         recv_END = False
         count = 0
         while True:
+            if self.debug:
+                logging.info('count: {}'.format(count))
             data_segment = RdtSegment(seq=seq_list[count], seqack=seqack, payload=payload_list[count])
             while True:
-                self.sendto(data_segment.encode())  # where is target
+                self.sendto(data_segment.encode())
                 time_send = time.time()
-                try:
+
+                # PRINT WHAT SEND
+                if self.debug:
+                    logging.info('send(): SEND A PACKET: MAGICAL_BIT: {}, '
+                                 'SYN: {}, FIN: {}, ACK: {}, '
+                                 'SEQ: {}, SEQACK: {}, LEN: {}'.format(
+                                    data_segment.magical_bit, data_segment.syn,
+                                    data_segment.fin, data_segment.ack,
+                                    data_segment.seq, data_segment.seqack,
+                                    data_segment.LEN))
+                    logging.info('PAYLOAD: {}'.format(data_segment.paylaod))
+
+                try:  # receive ACK
                     ack, address = self.receive_something()
+                    if address[1] == -1:
+                        raise Exception('send')
+
+                    # PRINT WHAT RECEIVE
+                    if self.debug:
+                        logging.info('send(): RECEIVE A PACKET FROM {}: MAGICAL_BIT: {}, '
+                                     'SYN: {}, FIN: {}, ACK: {}, '
+                                     'SEQ: {}, SEQACK: {}, LEN: {}'.format(
+                                        address,
+                                        ack.magical_bit, ack.syn,
+                                        ack.fin, ack.ack,
+                                        ack.seq, ack.seqack,
+                                        ack.LEN))
+                        logging.info('PAYLOAD: {}'.format(ack.paylaod))
+
                     if ack.ack != 1:
-                        logging.error('RECEIVE A NO ACK REPLY')
+                        if self.debug: logging.error('send(): RECEIVE A REPLY WITH NO ACK')
                         raise Exception
                     if ack.seqack == seq_list[count+1]:
-                        if ack.magical_bit == 1:
+                        # logging.info('ack.seqack == seq_list[count+1] {}  {}'.format(ack.seqack, seq_list[count+1]))
+                        # time.sleep(1000)
+                        if ack.magical_bit == 1:  # have received magical_bit from recv()
                             recv_END = True
-                        self.seq = seq[count+1]
+                        self.seq = seq_list[count+1]  # update seq
                         break
                     else:
-                        logging.error('send(): RECEIVE WRONG SEQACK SEQACK: {}, ACK+LEN: {}'.format(ack.seqack,
-                                                                                                    seq_list[count+1]))
+                        if self.debug: logging.error('send(): RECEIVE WRONG SEQACK '
+                                                     'SEQACK: {}, ACK+LEN: {}'.format(ack.seqack, seq_list[count+1]))
                 except Exception as e:
                     continue
 
-            rtt_1 = time.time() - time_send
+            rtt_1 = time.time() - time_send  # TODO: 是否debug分别处理
             self.rtt_list.append(rtt_1)
             # if len(self.rtt_list) >= 30:
             #     self.rtt_list.pop(__index=0)
 
-
-
-
-
-
-
-
-
-
-
-
-
+            if recv_END:  # recv()已进入结束状态
+                logging.error('BBBBBBBBBBBBBBIG PROBLEM')
+                # TODO: 定时器
 
             count += 1
-            if count > segment_num:
+            if count >= segment_num:
                 break
 
-        # 发标识包让recv关闭
-        magical_segment = RdtSegment(magical_bit=1, ack=1)
-        self.sendto(magical_segment.encode())
+        # 发标识包让recv关闭——send()发送标识包，收到recv()返回的标识ack即可退出
+        magical_segment = RdtSegment(magical_bit=1, seq=seq_list[-1])
+        sr = RdtSegment()
+        while True:
+            self.sendto(magical_segment.encode())
+            # time.sleep(self.TIMEOUT)  # ################################################################################
+            while True:  # TODO: NEED TO UPDATE
+                try:
+                    sr, _ = self.receive_something(4096)
+                    if _[1] == -1:
+                        raise Exception('send2')
+                    if sr.magical_bit == 1 and sr.ack == 1:
+                        break
+                except Exception as e:
+                    continue  # Original: continue
+            if sr.magical_bit == 1 and sr.ack == 1:
+                break
+
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -390,6 +434,9 @@ class RDTSocket(UnreliableSocket):
         # CHECK CHECKSUM
         if not segment_received.check_checksum():
             raise Exception('checksum is wrong')
+
+        if segment_received.fin == 1:
+            self.END = True
 
         return segment_received, address
 
@@ -591,11 +638,11 @@ class RdtSegment:
         self.ack = ack
         self.seq = seq
         self.seqack = seqack
+        self.paylaod = payload
         if LEN == -1:
             self.LEN = len(self.paylaod)
         else:
             self.LEN = LEN
-        self.paylaod = payload
         if checksum:
             self.checksum = checksum
         else:
@@ -619,9 +666,12 @@ class RdtSegment:
     def generate_checksum(self) -> int:
         s = sum(a for a in self.paylaod)
         s = s + (self.magical_bit << 3) + (self.syn << 2) + (self.fin << 1) + self.ack
-        s = s + ((self.seq & 0xFF000000) >> 24) + ((self.seq & 0x00FF0000) >> 16) + ((self.seq & 0x0000FF00) >> 8) + (self.seq & 0x000000FF)
-        s = s + ((self.seqack & 0xFF000000) >> 24) + ((self.seqack & 0x00FF0000) >> 16) + ((self.seqack & 0x0000FF00) >> 8) + (self.seqack & 0x000000FF)
-        s = s + ((self.LEN & 0xFF000000) >> 24) + ((self.LEN & 0x00FF0000) >> 16) + ((self.LEN & 0x0000FF00) >> 8) + (self.LEN & 0x000000FF)
+        s = s + ((self.seq & 0xFF000000) >> 24) + ((self.seq & 0x00FF0000) >> 16) + \
+            ((self.seq & 0x0000FF00) >> 8) + (self.seq & 0x000000FF)
+        s = s + ((self.seqack & 0xFF000000) >> 24) + ((self.seqack & 0x00FF0000) >> 16) + \
+            ((self.seqack & 0x0000FF00) >> 8) + (self.seqack & 0x000000FF)
+        s = s + ((self.LEN & 0xFF000000) >> 24) + ((self.LEN & 0x00FF0000) >> 16) + \
+            ((self.LEN & 0x0000FF00) >> 8) + (self.LEN & 0x000000FF)
         s = s % 256
         s = 0xFF - s
         return s

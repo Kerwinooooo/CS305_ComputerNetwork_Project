@@ -4,20 +4,20 @@ import time
 from difflib import Differ
 import sys
 
-if __name__=='__main__':
-    client = RDTSocket()
+if __name__ == '__main__':
+    client = RDTSocket(debug=True)
     # client = socket(AF_INET, SOCK_STREAM) # check what python socket does
     client.connect(('127.0.0.1', 9999))
 
     echo = b''
-    count = 5
+    count = 1  # 5
     slice_size = 2048
     blocking_send = True
 
     with open('alice.txt', 'r') as f:
         data = f.read()
         encoded = data.encode()
-        assert len(data)==len(encoded)
+        assert len(data) == len(encoded)
 
     '''
     check if your rdt pass either of the two
@@ -26,10 +26,10 @@ if __name__=='__main__':
     if blocking_send:
         print('transmit in mode A, send & recv in slices')
         slices = [encoded[i*slice_size:i*slice_size+slice_size] for i in range(len(encoded)//slice_size+1)]
-        assert sum([len(slice) for slice in slices])==len(encoded)
+        assert sum([len(slice) for slice in slices]) == len(encoded)
 
         start = time.perf_counter()
-        for i in range(count): # send 'alice.txt' for count times
+        for i in range(count):  # send 'alice.txt' for count times
             for slice in slices:
                 client.send(slice)
                 reply = client.recv(slice_size)
@@ -41,6 +41,7 @@ if __name__=='__main__':
             while len(echo) < len(encoded)*(i+1):
                 reply = client.recv(slice_size)
                 echo += reply
+            print('count: ', count)
 
     client.close()
 
@@ -51,5 +52,5 @@ if __name__=='__main__':
     print(f'transmitted {len(encoded)*count}bytes in {time.perf_counter()-start}s')
     diff = Differ().compare((data*count).splitlines(keepends=True), echo.decode().splitlines(keepends=True))
     for line in diff:
-        if not line.startswith('  '): # check if data is correctly echoed
+        if not line.startswith('  '):  # check if data is correctly echoed
             print(line)

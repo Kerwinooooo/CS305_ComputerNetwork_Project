@@ -25,13 +25,19 @@ def corrupt(data: bytes) -> bytes:
 
 
 class Server(ThreadingUDPServer):
-    def __init__(self, addr, rate=None, delay=None, loss=None):
+    def __init__(self, addr, rate=None, delay=None, loss=None, error_rate=None):
         super().__init__(addr, None)
         self.rate = rate
         self.buffer = 0
         self.delay = delay
-        self.loss = 0
-        self.error_rate = 0
+        if not loss:
+            self.loss = 0
+        else:
+            self.loss = loss
+        if not error_rate:
+            self.error_rate = 0
+        else:
+            self.error_rate = error_rate
 
     def verify_request(self, request, client_address):
         """

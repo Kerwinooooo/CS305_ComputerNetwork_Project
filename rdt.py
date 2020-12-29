@@ -66,10 +66,7 @@ class RDTSocket(UnreliableSocket):
 
         self.TIMEOUT = 1
         self.rtt_list = []
-        # self.receive_list = queue.Queue(maxsize=-1)  # TODO: delete
-        # queue.empty()
-        # queue.put(block=False)
-        # queue.get(block=False)
+
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -194,7 +191,6 @@ class RDTSocket(UnreliableSocket):
         it MUST NOT affect the data returned by this function.
         """
         data_receive = b''
-        # TODO: detect whether connection is established
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
@@ -211,7 +207,8 @@ class RDTSocket(UnreliableSocket):
         seqack = self.seqack
         count = 0
         while True:
-            # RECEIVE SEGMENT
+            # RECEIVE PACKET
+            self.setblocking(False)
             try:
                 segment_received, address = self.receive_something(bufsize=bufsize)
                 if self.END:
@@ -236,60 +233,68 @@ class RDTSocket(UnreliableSocket):
                 continue
 
             if segment_received.LEN == 0:
-                if segment_received.magical_bit == 1:  # send先结束
+                if segment_received.magical_bit == 1 and segment_received.ack == 0:  # send先结束
                     magical_segment_ack = RdtSegment(magical_bit=1, ack=1)
+                    self.setblocking(False)
                     self.sendto(magical_segment_ack.encode(), self.to_address)
-                    timer_start = time.time()
-                    while True:
-                        if time.time() - timer_start >= self.TIMEOUT:
-                            break
+                    time_send = time.time()
+                    while time.time() - time_send < 2 * self.TIMEOUT:
                         try:
                             sr, _ = self.receive_something(4096)
                             if self.END:
                                 return b''
                             if sr.magical_bit == 1 and sr.ack == 0:
                                 self.sendto(magical_segment_ack.encode(), self.to_address)
-                                timer_start = time.time()
+                                time_send = time.time()
+                            continue
                         except Exception as e:
                             continue
                     break
                 continue
             if segment_received.LEN + len(data_receive) <= bufsize:  # RECEIVE SOME DATA
                 data_receive += segment_received.paylaod
-                # 回一个包 带seqack
+                # 回seqack包
                 seqack += len(segment_received.paylaod)
                 rep = RdtSegment(ack=1, seq=seq, seqack=seqack)
-                print(seq, seqack)
+                self.setblocking(False)
                 self.sendto(rep.encode(), self.to_address)
-
+                time_send = time.time()
+                while time.time() - time_send < 2 * self.TIMEOUT:
+                    try:
+                        sr, _ = self.receive_something(4096)
+                        if self.END:
+                            return b''
+                        if sr.LEN != 0 and seqack-len(segment_received.paylaod) == sr.seq:
+                            self.sendto(rep.encode(), self.to_address)
+                            time_send = time.time()
+                        continue
+                    except Exception as e:
+                        continue
             else:  # recv先结束
                 if self.debug: logging.info('recv() end first')
                 if bufsize > len(data_receive):
                     data_receive += segment_received.paylaod[:bufsize - len(data_receive)]
                 # 回一个特殊标识包 带seqack
                 rep = RdtSegment(magical_bit=1, ack=1, seq=seq, seqack=seqack)
-                self.sendto(rep.encode(), self.to_address)
-
-                timer_start = time.time()
-                while True:  # BIGPROBLEM HOLYSHIT
-                    if time.time() - timer_start >= self.TIMEOUT:
-                        break
+                self.settimeout(self.TIMEOUT)
+                while True:
+                    self.sendto(rep.encode(), self.to_address)
                     try:
                         sr, _ = self.receive_something(4096)
                         if self.END:
                             return b''
                         if sr.magical_bit == 1:
-                            # 重发标识包 带seqack
-                            self.sendto(rep.encode(), self.to_address)
-                            timer_start = time.time()
+                            break
                     except Exception as e:
                         continue
+
                 seqack += len(segment_received.paylaod)
                 break
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
         self.seqack = seqack  # UPDATE SEQACK
+        if self.debug: logging.info('recv() END')
         return data_receive
 
     def send(self, bytes: bytes):
@@ -323,8 +328,6 @@ class RDTSocket(UnreliableSocket):
         seq_list.append(seq)
 
         window_left = 0
-        window_right = self.window_size
-        start_time_list = [time.time() * segment_num]
 
         recv_END = False
         count = 0
@@ -341,10 +344,10 @@ class RDTSocket(UnreliableSocket):
                     logging.info('send(): SEND A PACKET: MAGICAL_BIT: {}, '
                                  'SYN: {}, FIN: {}, ACK: {}, '
                                  'SEQ: {}, SEQACK: {}, LEN: {}'.format(
-                        data_segment.magical_bit, data_segment.syn,
-                        data_segment.fin, data_segment.ack,
-                        data_segment.seq, data_segment.seqack,
-                        data_segment.LEN))
+                                    data_segment.magical_bit, data_segment.syn,
+                                    data_segment.fin, data_segment.ack,
+                                    data_segment.seq, data_segment.seqack,
+                                    data_segment.LEN))
                     logging.info('PAYLOAD: {}'.format(data_segment.paylaod))
 
                 try:  # receive ACK
@@ -357,19 +360,18 @@ class RDTSocket(UnreliableSocket):
                         logging.info('send(): RECEIVE A PACKET FROM {}: MAGICAL_BIT: {}, '
                                      'SYN: {}, FIN: {}, ACK: {}, '
                                      'SEQ: {}, SEQACK: {}, LEN: {}'.format(
-                            address,
-                            ack.magical_bit, ack.syn,
-                            ack.fin, ack.ack,
-                            ack.seq, ack.seqack,
-                            ack.LEN))
+                                        address,
+                                        ack.magical_bit, ack.syn,
+                                        ack.fin, ack.ack,
+                                        ack.seq, ack.seqack,
+                                        ack.LEN))
                         logging.info('PAYLOAD: {}'.format(ack.paylaod))
 
                     if ack.ack != 1:
-                        if self.debug: logging.error('send(): RECEIVE A REPLY WITH NO ACK')
+                        if self.debug: logging.warning('send(): RECEIVE A REPLY WITH NO ACK')
                         raise Exception
+
                     if ack.seqack == seq_list[count + 1]:
-                        # logging.info('ack.seqack == seq_list[count+1] {}  {}'.format(ack.seqack, seq_list[count+1]))
-                        # time.sleep(1000)
                         if ack.magical_bit == 1:  # have received magical_bit from recv()
                             recv_END = True
                         self.seq = seq_list[count + 1]  # update seq
@@ -380,37 +382,50 @@ class RDTSocket(UnreliableSocket):
                 except Exception as e:
                     continue
 
-            rtt_1 = time.time() - time_send  # TODO: 是否debug分别处理
-            self.rtt_list.append(rtt_1)
-            # if len(self.rtt_list) >= 30:
-            #     self.rtt_list.pop(__index=0)
+            # rtt_1 = time.time() - time_send
+            # self.rtt_list.append(rtt_1)
 
             if recv_END:  # recv()已进入结束状态
-                logging.error('BBBBBBBBBBBBBBIG PROBLEM')
-                # TODO: 定时器
+                if self.debug: logging.error('send(): recv want to end first')
+                break
 
             count += 1
             if count >= segment_num:
                 break
 
-        # 发标识包让recv关闭——send()发送标识包，收到recv()返回的标识ack即可退出
-        magical_segment = RdtSegment(magical_bit=1, seq=seq_list[-1])
-        sr = RdtSegment()
-        while True:
-            self.sendto(magical_segment.encode(), self.to_address)
-            # time.sleep(self.TIMEOUT)  # ################################################################################
-            while True:  # TODO: NEED TO UPDATE
+        if not recv_END:
+            # 发标识包让recv关闭——send()发送标识包，收到recv()返回的标识ack即可退出
+            magical_segment = RdtSegment(magical_bit=1, seq=seq_list[-1])
+            self.settimeout(self.TIMEOUT)
+            while True:
+                self.sendto(magical_segment.encode(), self.to_address)
                 try:
                     sr, _ = self.receive_something(4096)
-                    if _[1] == -1:
-                        raise Exception('send2')
+                    if self.END:
+                        return
                     if sr.magical_bit == 1 and sr.ack == 1:
                         break
                 except Exception as e:
-                    continue  # Original: continue
-            if sr.magical_bit == 1 and sr.ack == 1:
-                break
+                    continue
+        elif recv_END:
+            # recv()已进入结束状态--send()发送标识包并等待timeout
+            mb_ack = RdtSegment(magical_bit=1, seq=seq_list[count + 1], seqack=seqack)
+            self.setblocking(False)
+            self.sendto(mb_ack.encode(), self.to_address)
+            time_send = time.time()
+            while time.time() - time_send < 2 * self.TIMEOUT:
+                try:
+                    sr, _ = self.receive_something(4096)
+                    if self.END:
+                        return b''
+                    if sr.ack == 1 and sr.magical_bit == 1:
+                        self.sendto(mb_ack.encode(), self.to_address)
+                        time_send = time.time()
+                    continue
+                except Exception as e:
+                    continue
 
+        if self.debug: logging.info('send() END')
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -532,8 +547,8 @@ class RDTSocket(UnreliableSocket):
         #                             END OF YOUR CODE                              #
         #############################################################################
         self.setblocking(True)
-        if self.client:
-            super().close()
+        # if self.client:
+        super().close()
 
     @staticmethod
     def from_bytes(data: bytes):

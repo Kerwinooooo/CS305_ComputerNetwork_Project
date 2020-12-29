@@ -61,11 +61,17 @@ class RDTSocket(UnreliableSocket):
         self.ack = 0
         self.seqack = 0  # it is used by zhb
         # 连接的socket的地址
+        self.address = None
         self.to_address = None
-        self.port = None
-
         self.TIMEOUT = 1
         self.rtt_list = []
+        # 连接池的情况
+        self.belong_to = None
+        self.max_conn = 10
+        self.use = []
+        for i in range(self.max_conn):
+            self.use.append(False)
+        self.use_seq = None
 
         #############################################################################
         #                             END OF YOUR CODE                              #
@@ -81,51 +87,58 @@ class RDTSocket(UnreliableSocket):
         This function should be blocking.
         """
         conn = RDTSocket(self._rate)
+        i = 0
+        while self.use[i]:
+            i += 1
+        conn.bind((self.address[0], self.address[1] + i + 1))
+        self.use[i] = True
+        conn.use_seq = i
+        conn.belong_to = self
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
         while True:
             data, addr = self.recvfrom(1024)
-            check_sum, flag, seq, ack, length, content = self.from_bytes(data)
+            check_sum, flag, seq, ack, length, content = conn.from_bytes(data)
             # print(flag, seq, ack, length, content)
             # print(flag , SYN , addr , self.to_address)
-            if self.check_checksum(data) and flag == SYN:
+            if conn.check_checksum(data) and flag == SYN:
                 print('recv syn')
-                self.client = False
-                print(self.to_address)
-                self.to_address = addr
-                self.ack = seq + 1
-                SYNACK_segment = Segment(empty=True, flag=SYN + ACK, seq_num=conn.seq, ack_num=self.ack,
+                conn.client = False
+                print(conn.to_address)
+                conn.to_address = addr
+                conn.ack = seq + 1
+                SYNACK_segment = Segment(empty=True, flag=SYN + ACK, seq_num=conn.seq, ack_num=conn.ack,
                                          content=content)
-                self.sendto(SYNACK_segment.to_bytes(), self.to_address)
+                conn.sendto(SYNACK_segment.to_bytes(), conn.to_address)
                 print('send syn ack')
                 break
-        self.setblocking(False)
+        conn.setblocking(False)
         while True:
             try:
-                data, addr = self.recvfrom(1024)
-                check_sum, flag, seq, ack, length, content = self.from_bytes(data)
+                data, addr = conn.recvfrom(1024)
+                check_sum, flag, seq, ack, length, content = conn.from_bytes(data)
                 # print(check_sum, flag, ACK, addr, self.to_address)
-                if self.check_checksum(data) and flag == SYN and addr == self.to_address:
+                if conn.check_checksum(data) and flag == SYN and addr == conn.to_address:
                     print('recv syn')
                 # print(flag , ACK , addr , self.to_address)
-                if self.check_checksum(data) and flag == ACK and addr == self.to_address:
+                if conn.check_checksum(data) and flag == ACK and addr == conn.to_address:
                     print('recv ack')
                     break
             except BlockingIOError:
-                self.sendto(SYNACK_segment.to_bytes(), self.to_address)
+                conn.sendto(SYNACK_segment.to_bytes(), conn.to_address)
                 print('send syn ack')
                 time.sleep(frequency)
                 continue
         print('connection build')
         time.sleep(time_out)
-        self.setblocking(True)
-        self.seq = 0
-        self.seqack = 0
+        conn.setblocking(True)
+        conn.seq = 0
+        conn.seqack = 0
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
-        return self, self.to_address
+        return conn, conn.address
 
     def connect(self, address: (str, int)):
         """
@@ -136,11 +149,10 @@ class RDTSocket(UnreliableSocket):
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
         self.client = True
-        self.to_address = address
         self.setblocking(False)
         while True:
             SYN_segment = Segment(empty=True, flag=SYN, seq_num=self.seq, ack_num=self.ack)
-            self.sendto(SYN_segment.to_bytes(), self.to_address)
+            self.sendto(SYN_segment.to_bytes(), address)
             print('send syn')
             time.sleep(frequency)
             try:
@@ -148,7 +160,8 @@ class RDTSocket(UnreliableSocket):
             except BlockingIOError:
                 continue
             check_sum, flag, seq, ack, length, content = self.from_bytes(data)
-            if self.check_checksum(data) and flag == SYN + ACK and ack == self.seq + 1 and addr == self.to_address:
+            if self.check_checksum(data) and flag == SYN + ACK and ack == self.seq + 1:
+                self.to_address = addr
                 print('recv syn ack')
                 break
             else:
@@ -164,13 +177,13 @@ class RDTSocket(UnreliableSocket):
             end = time.time()
             try:
                 data, addr = self.recvfrom(1024)
-                start = time.time()  # TODO: timer更新的时机可能不太对
                 print('recv syn ack')
             except BlockingIOError:
                 continue
             check_sum, flag, seq, ack, length, content = self.from_bytes(data)
             if self.check_checksum(data) and flag == SYN + ACK and ack == self.seq + 1 and addr == self.to_address:
                 self.sendto(ACK_segment.to_bytes(), self.to_address)
+                start = time.time()
                 print('send ack')
         print('connection build')
         self.setblocking(True)
@@ -264,7 +277,7 @@ class RDTSocket(UnreliableSocket):
                         sr, _ = self.receive_something(4096)
                         if self.END:
                             return b''
-                        if sr.LEN != 0 and seqack-len(segment_received.paylaod) == sr.seq:
+                        if sr.LEN != 0 and seqack - len(segment_received.paylaod) == sr.seq:
                             self.sendto(rep.encode(), self.to_address)
                             time_send = time.time()
                         continue
@@ -344,10 +357,10 @@ class RDTSocket(UnreliableSocket):
                     logging.info('send(): SEND A PACKET: MAGICAL_BIT: {}, '
                                  'SYN: {}, FIN: {}, ACK: {}, '
                                  'SEQ: {}, SEQACK: {}, LEN: {}'.format(
-                                    data_segment.magical_bit, data_segment.syn,
-                                    data_segment.fin, data_segment.ack,
-                                    data_segment.seq, data_segment.seqack,
-                                    data_segment.LEN))
+                        data_segment.magical_bit, data_segment.syn,
+                        data_segment.fin, data_segment.ack,
+                        data_segment.seq, data_segment.seqack,
+                        data_segment.LEN))
                     logging.info('PAYLOAD: {}'.format(data_segment.paylaod))
 
                 try:  # receive ACK
@@ -360,11 +373,11 @@ class RDTSocket(UnreliableSocket):
                         logging.info('send(): RECEIVE A PACKET FROM {}: MAGICAL_BIT: {}, '
                                      'SYN: {}, FIN: {}, ACK: {}, '
                                      'SEQ: {}, SEQACK: {}, LEN: {}'.format(
-                                        address,
-                                        ack.magical_bit, ack.syn,
-                                        ack.fin, ack.ack,
-                                        ack.seq, ack.seqack,
-                                        ack.LEN))
+                            address,
+                            ack.magical_bit, ack.syn,
+                            ack.fin, ack.ack,
+                            ack.seq, ack.seqack,
+                            ack.LEN))
                         logging.info('PAYLOAD: {}'.format(ack.paylaod))
 
                     if ack.ack != 1:
@@ -547,8 +560,9 @@ class RDTSocket(UnreliableSocket):
         #                             END OF YOUR CODE                              #
         #############################################################################
         self.setblocking(True)
-        if self.client:
-            super().close()
+        # if self.client:
+        self.belong_to.use[self.use_seq] = False
+        self.belong_to.super().close()
 
     @staticmethod
     def from_bytes(data: bytes):
@@ -575,6 +589,10 @@ class RDTSocket(UnreliableSocket):
     """
     You can define additional functions and classes to do thing such as packing/unpacking packets, or threading.
     """
+
+    def bind(self, address: (str, int)):
+        self.address = address
+        super(RDTSocket, self).bind(address)
 
     # @staticmethod
     # def check_sum(segment: bytes):

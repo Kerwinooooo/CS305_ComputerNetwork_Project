@@ -502,7 +502,7 @@ class RDTSocket(UnreliableSocket):
                         ACK_segment = Segment(empty=True, flag=ACK, seq_num=self.seq, ack_num=seq + 1)
                         self.sendto(ACK_segment.to_bytes())
                         break
-                except TypeError:
+                except Exception as e:
                     continue
             start = time.time()
             end = time.time()

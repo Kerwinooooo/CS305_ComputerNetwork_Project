@@ -65,7 +65,7 @@ class RDTSocket(UnreliableSocket):
         self.to_address = None
         self.port = None
 
-        self.TIMEOUT = 1
+        self.TIMEOUT = 0.1
         self.rtt_list = []
         # 连接池的情况
         self.belong_to = None
@@ -88,6 +88,7 @@ class RDTSocket(UnreliableSocket):
 
         This function should be blocking.
         """
+        # 连接初始化
         conn = RDTSocket(self._rate)
         i = 0
         while self.use[i]:
@@ -99,6 +100,7 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
+        # socket第一次收到ack包
         while True:
             data, addr = self.recvfrom(1024)
             check_sum, flag, seq, ack, length, content = conn.from_bytes(data)
@@ -116,6 +118,7 @@ class RDTSocket(UnreliableSocket):
                 print('send syn ack')
                 break
         conn.setblocking(False)
+        # 进入状态2
         while True:
             try:
                 data, addr = conn.recvfrom(1024)
@@ -152,6 +155,7 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         self.client = True
         self.setblocking(False)
+        # 发起连接
         while True:
             SYN_segment = Segment(empty=True, flag=SYN, seq_num=self.seq, ack_num=self.ack)
             self.sendto(SYN_segment.to_bytes(), address)
@@ -566,7 +570,6 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
-        self.setblocking(True)
         if not self.client:
             self.belong_to.use[self.use_seq] = False
         super().close()

@@ -68,14 +68,3 @@ class UnreliableSocket:
 
 if __name__ == "__main__":
     pass
-    sock1 = UnreliableSocket()
-    sock1.bind(('127.0.0.1', 81))
-    sock2 = UnreliableSocket()
-    sock2.bind(('127.0.0.1', 82))
-    print('initial')
-    for i in range(100):
-        sock1.sendto(b'hello', ('127.0.0.1', 82))
-    for i in range(100):
-        a = sock2.recvfrom(2048)
-        # print(type(a[0]))
-        # print(type(a[1]))

@@ -240,7 +240,7 @@ class RDTSocket(UnreliableSocket):
                                 segment_received.seq, segment_received.seqack,
                                 segment_received.LEN))
 
-            if seqack != segment_received.seq:  # TODO: 可以发以前seq的回包
+            if seqack != segment_received.seq:
                 if self.debug: logging.error(
                     'recv(): RECEIVE WRONG SEQ SEQ: {}, LASTSEQACK: {}'.format(segment_received.seq, seqack))
                 if seqack > segment_received.seq:

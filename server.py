@@ -1,18 +1,24 @@
-from network import Server
 from rdt import RDTSocket
+from socket import socket, AF_INET, SOCK_DGRAM, SOCK_STREAM
+import time
 
-addr1 = ('127.0.0.1', 6000)
-addr2 = ('127.0.0.1', 7000)
-addr3 = ('127.0.0.1', 8000)
-addr4 = ('127.0.0.1', 9000)
-server_address1 = ('127.0.0.1', 12345)
-server_address2 = ('127.0.0.1', 23456)
-
-if __name__ == '__main__':
+if __name__=='__main__':
     server = RDTSocket(debug=True)
+    # server = socket(AF_INET, SOCK_STREAM) # check what python socket does
     server.bind(('127.0.0.1', 9999))
-    conn, client_addr = server.accept()
-    conn.close()
-    conn3, client_addr3 = server.accept()
-    # rep = conn.recv(4096)
-    # print(rep.decode('utf-8'))
+    # server.listen(0) # check what python socket does
+
+    while True:
+        conn, client_addr = server.accept()
+        start = time.perf_counter()
+        while True:
+            data = conn.recv(2048)
+            if data:
+                conn.send(data)
+            else:
+                break
+        '''
+        make sure the following is reachable
+        '''
+        conn.close()
+        print(f'connection finished in {time.perf_counter()-start}s')

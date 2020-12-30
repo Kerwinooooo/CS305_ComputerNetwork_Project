@@ -30,8 +30,6 @@ class Server(ThreadingUDPServer):
         self.rate = rate
         self.buffer = 0
         self.delay = delay
-        loss = 0.1
-        error_rate = 0.00005
         if not loss:
             self.loss = 0
         else:
@@ -102,5 +100,5 @@ class Server(ThreadingUDPServer):
 server_address = ('127.0.0.1', 12345)
 
 if __name__ == '__main__':
-    with Server(server_address, loss=0.1, error_rate=0.00001) as server:
+    with Server(server_address, loss=0.05, error_rate=0) as server:
         server.serve_forever()

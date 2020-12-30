@@ -65,7 +65,7 @@ class RDTSocket(UnreliableSocket):
         self.to_address = None
         self.port = None
 
-        self.TIMEOUT = 1
+        self.TIMEOUT = 0.2
         self.rtt_list = []
         # 连接池的情况
         self.belong_to = None
@@ -201,15 +201,9 @@ class RDTSocket(UnreliableSocket):
         Receive data from the socket.
         The return value is a bytes object representing the data received.
         The maximum amount of data to be received at once is specified by bufsize.
-
-        Note that ONLY data send by the peer should be accepted.
-        In other words, if someone else sends data to you from another address,
-        it MUST NOT affect the data returned by this function.
         """
         data_receive = b''
-        #############################################################################
-        # TODO: YOUR CODE HERE                                                      #
-        #############################################################################
+
         self.setblocking(False)
         # CLEAR BUFFER
         while True:
@@ -221,7 +215,6 @@ class RDTSocket(UnreliableSocket):
 
         seq = self.seq
         seqack = self.seqack
-        count = 0
         while True:
             # RECEIVE PACKET
             self.setblocking(False)
@@ -237,24 +230,27 @@ class RDTSocket(UnreliableSocket):
                 logging.info('recv(): RECEIVE A PACKET FROM {}: MAGICAL_BIT: {}, '
                              'SYN: {}, FIN: {}, ACK: {}, '
                              'SEQ: {}, SEQACK: {}, LEN: {}'.format(
-                    address,
-                    segment_received.magical_bit, segment_received.syn,
-                    segment_received.fin, segment_received.ack,
-                    segment_received.seq, segment_received.seqack,
-                    segment_received.LEN))
+                                address,
+                                segment_received.magical_bit, segment_received.syn,
+                                segment_received.fin, segment_received.ack,
+                                segment_received.seq, segment_received.seqack,
+                                segment_received.LEN))
 
             if seqack != segment_received.seq:  # TODO: 可以发以前seq的回包
                 if self.debug: logging.error(
                     'recv(): RECEIVE WRONG SEQ SEQ: {}, LASTSEQACK: {}'.format(segment_received.seq, seqack))
+                if seqack > segment_received.seq:
+                    rep = RdtSegment(ack=1, seq=seq, seqack=segment_received.LEN + segment_received.seq)
+                    self.sendto(rep.encode(), self.to_address)
                 continue
 
             if segment_received.LEN == 0:
-                if segment_received.magical_bit == 1 and segment_received.ack == 0:  # send先结束
+                if segment_received.magical_bit == 1 and segment_received.ack == 0:  # send() WANT TO END
                     magical_segment_ack = RdtSegment(magical_bit=1, ack=1)
                     self.setblocking(False)
                     self.sendto(magical_segment_ack.encode(), self.to_address)
                     time_send = time.time()
-                    while time.time() - time_send < 2 * self.TIMEOUT:  # Problem
+                    while time.time() - time_send < 2 * self.TIMEOUT:
                         try:
                             sr, _ = self.receive_something(4096)
                             if self.END:
@@ -267,11 +263,13 @@ class RDTSocket(UnreliableSocket):
                             continue
                     break
                 continue
+
             if segment_received.LEN + len(data_receive) <= bufsize:  # RECEIVE SOME DATA
                 data_receive += segment_received.paylaod
-                # 回seqack包
+                # SEND PACKET WITH SEQACK
                 seqack += len(segment_received.paylaod)
                 rep = RdtSegment(ack=1, seq=seq, seqack=seqack)
+                # TIMER TO MAKE SURE ACK IS RECEIVED
                 self.setblocking(False)
                 self.sendto(rep.encode(), self.to_address)
                 time_send = time.time()
@@ -286,11 +284,11 @@ class RDTSocket(UnreliableSocket):
                         continue
                     except Exception as e:
                         continue
-            else:  # recv先结束
+            else:  # recv() WANT TO END
                 if self.debug: logging.info('recv() end first')
                 if bufsize > len(data_receive):
                     data_receive += segment_received.paylaod[:bufsize - len(data_receive)]
-                # 回一个特殊标识包 带seqack
+                # SEND A PACKET WITH INFORMATION OF END TRANSMISSION AND SEQACK
                 rep = RdtSegment(magical_bit=1, ack=1, seq=seq, seqack=seqack)
                 self.settimeout(self.TIMEOUT)
                 while True:
@@ -306,9 +304,7 @@ class RDTSocket(UnreliableSocket):
 
                 seqack += len(segment_received.paylaod)
                 break
-        #############################################################################
-        #                             END OF YOUR CODE                              #
-        #############################################################################
+
         self.seqack = seqack  # UPDATE SEQACK
         if self.debug: logging.info('recv() END')
         return data_receive
@@ -318,11 +314,7 @@ class RDTSocket(UnreliableSocket):
         Send data to the socket.
         The socket must be connected to a remote socket, i.e. self._send_to must not be none.
         """
-        # assert self._send_to, "Connection not established yet. Use sendto instead."
-        # TODO: detect whether connection is established
-        #############################################################################
-        # TODO: YOUR CODE HERE                                                      #
-        #############################################################################
+
         self.setblocking(False)
         # CLEAR BUFFER
         while True:
@@ -336,20 +328,16 @@ class RDTSocket(UnreliableSocket):
         seqack = self.seqack
         payload_list = get_data_chunks(bytes, self.max_data_length)
         segment_num = len(payload_list)
-        seq_list = []
 
+        seq_list = []
         for i in range(segment_num):
             seq_list.append(seq)
             seq += len(payload_list[i])
         seq_list.append(seq)
 
-        window_left = 0
-
         recv_END = False
         count = 0
         while True:
-            if self.debug:
-                logging.info('count: {}'.format(count))
             data_segment = RdtSegment(seq=seq_list[count], seqack=seqack, payload=payload_list[count])
             while True:
                 self.sendto(data_segment.encode(), self.to_address)
@@ -360,33 +348,31 @@ class RDTSocket(UnreliableSocket):
                     logging.info('send(): SEND A PACKET: MAGICAL_BIT: {}, '
                                  'SYN: {}, FIN: {}, ACK: {}, '
                                  'SEQ: {}, SEQACK: {}, LEN: {}'.format(
-                        data_segment.magical_bit, data_segment.syn,
-                        data_segment.fin, data_segment.ack,
-                        data_segment.seq, data_segment.seqack,
-                        data_segment.LEN))
+                                    data_segment.magical_bit, data_segment.syn,
+                                    data_segment.fin, data_segment.ack,
+                                    data_segment.seq, data_segment.seqack,
+                                    data_segment.LEN))
                     logging.info('PAYLOAD: {}'.format(data_segment.paylaod))
 
-                try:  # receive ACK
+                try:  # TRY TO RECEIVE ACK PACKET
                     ack, address = self.receive_something()
-                    if address[1] == -1:
-                        raise Exception('send')
 
                     # PRINT WHAT RECEIVE
                     if self.debug:
                         logging.info('send(): RECEIVE A PACKET FROM {}: MAGICAL_BIT: {}, '
                                      'SYN: {}, FIN: {}, ACK: {}, '
                                      'SEQ: {}, SEQACK: {}, LEN: {}'.format(
-                            address,
-                            ack.magical_bit, ack.syn,
-                            ack.fin, ack.ack,
-                            ack.seq, ack.seqack,
-                            ack.LEN))
+                                        address,
+                                        ack.magical_bit, ack.syn,
+                                        ack.fin, ack.ack,
+                                        ack.seq, ack.seqack,
+                                        ack.LEN))
                         logging.info('PAYLOAD: {}'.format(ack.paylaod))
 
                     if ack.ack != 1:
                         if self.debug: logging.warning('send(): RECEIVE A REPLY WITH NO ACK')
                         if ack.LEN == 0 and ack.magical_bit == 1:
-                            if self.debug: logging.warning('send(): THERE IS TOO MANY PACKET LOSS')
+                            if self.debug: logging.warning('send(): THERE IS TOO MANY PACKET LOSS(the timer in recv() may broke down)')
                             timeout_process = RdtSegment(magical_bit=1, ack=1)
                             self.sendto(timeout_process.encode(), self.to_address)
                         raise Exception
@@ -394,7 +380,7 @@ class RDTSocket(UnreliableSocket):
                     if ack.seqack == seq_list[count + 1]:
                         if ack.magical_bit == 1:  # have received magical_bit from recv()
                             recv_END = True
-                        self.seq = seq_list[count + 1]  # update seq
+                        self.seq = seq_list[count + 1]  # UPDATE SEQ
                         break
                     else:
                         if self.debug: logging.error('send(): RECEIVE WRONG SEQACK '
@@ -406,7 +392,7 @@ class RDTSocket(UnreliableSocket):
             # self.rtt_list.append(rtt_1)
 
             if recv_END:  # recv()已进入结束状态
-                if self.debug: logging.error('send(): recv want to end first')
+                if self.debug: logging.info('send(): recv want to end first')
                 break
 
             count += 1
@@ -451,6 +437,11 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
 
     def receive_something(self, bufsize: int = 4096):
+        """
+            RECEVIE A PACKET
+            CHECK ADDRESS & LENGTH && CHECKSUM
+            RETURN A 'RDTSEGMENT'
+        """
         data, address = self.recvfrom(bufsize)
 
         # CHECK SEGMENT SOURCE
@@ -601,18 +592,6 @@ class RDTSocket(UnreliableSocket):
         self.address = address
         super(RDTSocket, self).bind(address)
 
-    # @staticmethod
-    # def check_sum(segment: bytes):
-    #     i = list(iter(segment))
-    #     for x in i:
-    #         print(x)
-    #     bytes_sum = sum(int.from_bytes(x, 'big') for x in i)
-    #     if len(segment) % 2 == 1:
-    #         bytes_sum += segment[-1] << 8
-    #     bytes_sum = (bytes_sum & 0xFFFF) + (bytes_sum >> 16)
-    #     bytes_sum = (bytes_sum & 0xFFFF) + (bytes_sum >> 16)
-    #     return ~bytes_sum & 0xFFFF
-
 
 def get_data_chunks(data: bytes, max_data_length: int):
     try:
@@ -624,7 +603,7 @@ def get_data_chunks(data: bytes, max_data_length: int):
 
 
 class RdtSegment:
-    magical_bit: int = 0
+    magical_bit: int = 0  # 用于确认传输结束
     syn: int = 0
     fin: int = 0
     ack: int = 0

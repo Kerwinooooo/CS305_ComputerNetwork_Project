@@ -484,6 +484,7 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
+        # 如果是client发起关闭
         if self.client:
             self.setblocking(False)
             while True:
@@ -527,8 +528,8 @@ class RDTSocket(UnreliableSocket):
                 except BlockingIOError:
                     continue
             print('connection close')
+        # server接收到关闭连接请求
         if not self.client:
-            # 接收到关闭连接请求
             while True:
                 try:
                     data, addr = self.recvfrom(1024)
@@ -570,6 +571,7 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
+        # 关闭连接，将连接池置空
         if not self.client:
             self.belong_to.use[self.use_seq] = False
         super().close()
